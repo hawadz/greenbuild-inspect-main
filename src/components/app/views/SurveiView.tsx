@@ -1,5 +1,7 @@
+// src/components/app/views/SurveiView.tsx
+
 import { useState, useRef } from "react";
-import { ChevronLeft, ChevronRight, Upload, Camera, Plus, Trash2, Check, FileText, Image as ImageIcon, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Upload, Camera, Plus, Trash2, Check, Save, Image as ImageIcon, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,23 +11,31 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+// --- TAMBAHAN IMPORT BARU MULAI DI SINI ---
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import { Info, Layers } from "lucide-react";
+// --- TAMBAHAN IMPORT BARU SELESAI ---
 import { toast } from "sonner";
-import axios from "axios"; // Perbaikan import axios
+import axios from "axios";
 
-// Tipe Data
+// --- TYPE DATA ---
 type DamageRow = {
   id: string;
+  kode: string; // Tambahan: P1, K1, dll
   komponen: string;
   jenis: string;
   volumeTotal: string;
+  panjang: string; // Tambahan dimensi
+  lebar: string;   // Tambahan dimensi
+  tinggi: string;  // Tambahan dimensi
   volumeKerusakan: string;
   satuan: string;
   foto: string | null;
+  kategoriKey: string; // Untuk memfilter berdasarkan step
 };
 
 type IdentitasGedung = {
@@ -39,9 +49,10 @@ type IdentitasGedung = {
   namaPemilik: string;
   alamat: string;
   catatan: string;
+  asBuiltDrawing: string | null; // Tambahan: As-Built Drawing
 };
 
-// Data Kategori Kerusakan
+// --- DATA REFERENSI ---
 const CATEGORIES = [
   {
     key: "struktur",
@@ -51,8 +62,8 @@ const CATEGORIES = [
       { name: "Pondasi", unit: "m³", jenisKerusakan: ["Deformasi/Turun", "Retak", "Bocor", "Rapuh", "Tidak ada kerusakan"] },
       { name: "Kolom", unit: "m³", jenisKerusakan: ["Melengkung", "Retak", "Patah", "Tidak ada kerusakan"] },
       { name: "Balok dan Pelat", unit: "m³", jenisKerusakan: ["Melengkung", "Retak", "Patah/Remuk", "Bocor", "Tidak ada kerusakan"] },
-      { name: "Plesteran Struktur", unit: "m³", jenisKerusakan: ["Retak rambut", "Pengelupasan dan Pelepasan", "Penggelambungan", "Pengkristalan Garam", "Tidak ada kerusakan"] },
-      { name: "Rangka Atap", unit: "m³", jenisKerusakan: ["Melengkung", "Rusak/Patah", "Bocor", "Retak", "Korosi/Rapuh", "Sambungan lepas", "Tidak ada kerusakan"] },
+      { name: "Plesteran Struktur", unit: "m²", jenisKerusakan: ["Retak rambut", "Pengelupasan dan Pelepasan", "Penggelambungan", "Pengkristalan Garam", "Tidak ada kerusakan"] },
+      { name: "Rangka Atap", unit: "m²", jenisKerusakan: ["Melengkung", "Rusak/Patah", "Bocor", "Retak", "Korosi/Rapuh", "Sambungan lepas", "Tidak ada kerusakan"] },
     ],
   },
   {
@@ -64,10 +75,10 @@ const CATEGORIES = [
       { name: "Rangka Langit-Langit", unit: "m²", jenisKerusakan: ["Pelapukan pada rangka kayu", "Korosi pada rangka metal", "Rusak pada sambungan", "Tidak ada kerusakan"] },
       { name: "Penutup Langit-Langit", unit: "m²", jenisKerusakan: ["Kerusakan panil plafon", "Kotor/Berbecak", "Pudar", "Panil lepas", "Panil longgar", "Panil hilang", "Panil melengkung", "Panil retak", "Tidak ada kerusakan"] },
       { name: "Dinding Batu Bata/Partisi", unit: "m²", jenisKerusakan: ["Melengkung/Cembung", "Retak", "Adukan lepas", "Turun/Runtuh", "Mencuat", "Tidak ada kerusakan"] },
-      { name: "Dinding Plesteran", unit: "m³", jenisKerusakan: ["Retak rambut", "Celah", "Pengapuran", "Bocor", "Lapisan luar lepas/Terkelupas", "Lembab", "Berlumut/berjamur", "Ditumbuhi tanaman", "Terkikis", "Kotor", "Tidak ada kerusakan"] },
+      { name: "Dinding Plesteran", unit: "m²", jenisKerusakan: ["Retak rambut", "Celah", "Pengapuran", "Bocor", "Lapisan luar lepas/Terkelupas", "Lembab", "Berlumut/berjamur", "Ditumbuhi tanaman", "Terkikis", "Kotor", "Tidak ada kerusakan"] },
       { name: "Kaca", unit: "m²", jenisKerusakan: ["Retak", "Kondensasi", "Goresan atau Jamur", "Tidak ada kerusakan"] },
-      { name: "Pintu", unit: "m²", jenisKerusakan: ["Berlubang", "Patah", "Rusak", "Sambungan lepas", "Melengkung", "Tidak ada kerusakan"] },
-      { name: "Kusen", unit: "m³", jenisKerusakan: ["Lapuk termakan usia", "Rapuh/Keropos", "Retak", "Pudar", "Tidak ada kerusakan"] },
+      { name: "Pintu", unit: "unit", jenisKerusakan: ["Berlubang", "Patah", "Rusak", "Sambungan lepas", "Melengkung", "Tidak ada kerusakan"] },
+      { name: "Kusen", unit: "m¹", jenisKerusakan: ["Lapuk termakan usia", "Rapuh/Keropos", "Retak", "Pudar", "Tidak ada kerusakan"] },
       { name: "Penutup Lantai", unit: "m²", jenisKerusakan: ["Retak", "Remuk", "Kerusakan pada sambungan", "Lepas", "Hilang", "Rusak", "Berbercak/Pudar", "Pecah/Patah", "Tidak ada kerusakan"] },
     ],
   },
@@ -76,9 +87,9 @@ const CATEGORIES = [
     label: "Pekerjaan Utilitas",
     color: "bg-sky-100 text-sky-700",
     components: [
-      { name: "Instalasi Listrik", unit: "m¹", jenisKerusakan: ["Kabel/insulasi terbakar", "Korosi", "Label hilang/tidak tepat", "Kapasitas tidak cukup", "Sambungan longgar", "Ruang bebas", "Titik panas", "Air/uap air", "Tidak ada kerusakan"] },
+      { name: "Instalasi Listrik", unit: "titik", jenisKerusakan: ["Kabel/insulasi terbakar", "Korosi", "Label hilang/tidak tepat", "Kapasitas tidak cukup", "Sambungan longgar", "Ruang bebas", "Titik panas", "Air/uap air", "Tidak ada kerusakan"] },
       { name: "Instalasi Air", unit: "m¹", jenisKerusakan: ["Tekanan air", "Korosi", "Insulasi rusak", "Penahan pipa", "Katup bocor", "Pipa bocor", "Pembuangan air lambat", "Bercak", "Retak", "Tersumbat", "Tidak ada kerusakan"] },
-      { name: "Drainase Limbah", unit: "m²", jenisKerusakan: ["Retak", "Bergelombang", "Amblas", "Ada bagian yang rusak", "Terkelupas", "Turun", "Pecah", "Tidak ada kerusakan"] },
+      { name: "Drainase Limbah", unit: "m¹", jenisKerusakan: ["Retak", "Bergelombang", "Amblas", "Ada bagian yang rusak", "Terkelupas", "Turun", "Pecah", "Tidak ada kerusakan"] },
     ],
   },
   {
@@ -94,46 +105,67 @@ const CATEGORIES = [
   },
 ];
 
+// Definisi Steps
+const STEPS = [
+  { id: 1, label: "Data Umum", short: "Umum" },
+  { id: 2, label: "Struktur", short: "STR" },
+  { id: 3, label: "Non-Struktur", short: "N-STR" },
+  { id: 4, label: "Utilitas", short: "UTL" },
+  { id: 5, label: "Finishing", short: "FIN" },
+];
+
+// --- TAMBAHAN KODE REKOMENDASI MULAI DI SINI ---
+const REKOMENDASI_MAP: Record<string, string> = {
+  "Pondasi_Deformasi/Turun": `Rekomendasi Penanganan:
+Bangunan gedung yang mengalami rusak ringan dan sedang, direkomendasikan untuk dilakukan rehabilitasi. 
+
+Berikut adalah beberapa metode efektif untuk memperbaiki pondasi yang turun :
+a. Underpinning (Perkuatan Pondasi)
+Underpinning adalah teknik yang paling umum digunakan untuk memperkuat pondasi yang sudah ada dengan menambahkan elemen struktural baru di bawahnya.
+- Beton Baru : Memperdalam atau memperlebar pondasi dengan beton baru untuk mencapai lapisan tanah yang lebih padat/keras.
+- Tiang Baja/Piling (Push Piers) : Menggunakan alat hidrolik untuk mendorong tiang baja ke dalam tanah hingga mencapai tanah atau batuan dasar yang stabil, kemudian mengikatnya ke pondasi untuk mengangkat dan menstabilkannya.`,
+  // Nanti Anda bisa copy-paste dari PDF untuk komponen lainnya di sini
+  "default": "Silakan merujuk pada Buku Pedoman Pemeriksaan dan Penanganan Kerusakan Bangunan Gedung untuk rekomendasi detail.",
+};
+
 export function SurveiView() {
+
   const [step, setStep] = useState(1);
-  
-  // STATE PUSAT: Menyimpan data dari Step 1 dan Step 2 di sini agar bisa dikirim
+  const totalSteps = STEPS.length;
+
   const [identitas, setIdentitas] = useState<IdentitasGedung>({
-    namaBangunan: "", tahunDibangun: "", jumlahTingkat: "", luasTotal: "", 
-    luasBasement: "", fungsi: "", klasifikasi: "", namaPemilik: "", alamat: "", catatan: ""
+    namaBangunan: "", tahunDibangun: "", jumlahTingkat: "", luasTotal: "",
+    luasBasement: "", fungsi: "", klasifikasi: "", namaPemilik: "", alamat: "", catatan: "", asBuiltDrawing: null
   });
 
-  const [rows, setRows] = useState<DamageRow[]>([
-    { 
-      id: crypto.randomUUID(), komponen: CATEGORIES[0].components[0].name, 
-      jenis: CATEGORIES[0].components[0].jenisKerusakan[0], volumeTotal: "", 
-      volumeKerusakan: "", satuan: CATEGORIES[0].components[0].unit, foto: null
-    },
-  ]);
+  const [rows, setRows] = useState<DamageRow[]>([]);
 
-  // FUNGSI MENGIRIM DATA KE BACKEND NODE.JS
+  // --- FUNGSI SIMPAN DRAF ---
+  const simpanDraf = () => {
+    // Simpan ke Local Storage untuk sementara
+    const drafData = { identitas, rows, lastStep: step };
+    localStorage.setItem("survei_draf", JSON.stringify(drafData));
+    toast.success("Draf berhasil disimpan! Anda bisa melanjutkannya nanti.");
+  };
+
+  // --- FUNGSI KIRIM FINAL ---
   const simpanKeBackend = async () => {
-    // Memastikan ada nama bangunan yang diisi
     if (!identitas.namaBangunan) {
       toast.error("Nama Bangunan tidak boleh kosong!");
       setStep(1);
       return;
     }
 
-    const paketData = {
-      identitas: identitas,
-      dataKerusakan: rows
-    };
+    const paketData = { identitas, dataKerusakan: rows };
 
     try {
       toast.loading("Sedang mengirim data ke server...");
-      
-      // Menggunakan Axios untuk menembak ke URL backend lokal
       const respons = await axios.post("http://localhost:3000/api/simpan-survei", paketData);
-      
+
       if (respons.data.status === 'sukses') {
         toast.dismiss();
         toast.success(respons.data.pesan);
+        localStorage.removeItem("survei_draf"); // Hapus draf jika sukses
       }
     } catch (error) {
       toast.dismiss();
@@ -143,52 +175,55 @@ export function SurveiView() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">Mulai Survei Baru</h1>
-        <p className="text-sm text-muted-foreground mt-1">Lengkapi data umum dan data kerusakan bangunan.</p>
+    <div className="max-w-7xl mx-auto space-y-6 pb-20">
+      <div className="flex justify-between items-end">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">Inspeksi Lapangan</h1>
+          <p className="text-sm text-muted-foreground mt-1">Lengkapi data secara bertahap.</p>
+        </div>
+        <Button variant="outline" onClick={simpanDraf} className="gap-2">
+          <Save className="h-4 w-4" /> Simpan Draf
+        </Button>
       </div>
 
-      {/* Stepper */}
-      <Card className="p-4 sm:p-6 rounded-2xl shadow-card">
-        <div className="flex items-center gap-2 sm:gap-4">
-          {[1, 2].map((n) => (
-            <div key={n} className="flex-1 flex items-center gap-3">
-              <div className={`shrink-0 h-10 w-10 rounded-full grid place-items-center font-bold text-sm transition-all ${
-                step >= n ? "bg-gradient-primary text-primary-foreground shadow-lift" : "bg-muted text-muted-foreground"
-              }`}>
-                {step > n ? <Check className="h-4 w-4" /> : n}
+      {/* Stepper (Responsive) */}
+      <Card className="p-4 rounded-2xl shadow-sm border-muted/60">
+        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          {STEPS.map((s) => (
+            <div key={s.id} className="flex flex-col items-center gap-2 min-w-[60px] cursor-pointer" onClick={() => setStep(s.id)}>
+              <div className={`h-8 w-8 rounded-full grid place-items-center font-bold text-xs transition-all ${step >= s.id ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20" : "bg-muted text-muted-foreground"
+                }`}>
+                {step > s.id ? <Check className="h-4 w-4" /> : s.id}
               </div>
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Step {n}</div>
-                <div className={`text-sm font-semibold truncate ${step === n ? "text-foreground" : "text-muted-foreground"}`}>
-                  {n === 1 ? "Data Umum Gedung" : "Data Kerusakan"}
-                </div>
+              <div className={`text-[10px] font-semibold text-center whitespace-nowrap ${step === s.id ? "text-foreground" : "text-muted-foreground"}`}>
+                {s.label}
               </div>
-              {n === 1 && <div className={`flex-1 h-0.5 rounded-full ${step > 1 ? "bg-primary" : "bg-muted"}`} />}
             </div>
           ))}
         </div>
       </Card>
 
-      {/* Menampilkan Step 1 atau Step 2 dengan melemparkan props state */}
-      {step === 1 ? (
-        <Step1 identitas={identitas} setIdentitas={setIdentitas} />
-      ) : (
-        <Step2 rows={rows} setRows={setRows} />
-      )}
+      {/* Konten Step */}
+      <div className="min-h-[50vh]">
+        {step === 1 && <Step1 identitas={identitas} setIdentitas={setIdentitas} />}
+        {step === 2 && <StepKerusakan category={CATEGORIES[0]} rows={rows} setRows={setRows} />}
+        {step === 3 && <StepKerusakan category={CATEGORIES[1]} rows={rows} setRows={setRows} />}
+        {step === 4 && <StepKerusakan category={CATEGORIES[2]} rows={rows} setRows={setRows} />}
+        {step === 5 && <StepKerusakan category={CATEGORIES[3]} rows={rows} setRows={setRows} />}
+      </div>
 
-      <div className="flex justify-between">
-        <Button variant="outline" disabled={step === 1} onClick={() => setStep(1)}>
-          <ChevronLeft className="h-4 w-4 mr-1" /> Kembali
+      {/* Navigasi Bawah */}
+      <div className="flex justify-between mt-8 pt-4 border-t">
+        <Button variant="outline" disabled={step === 1} onClick={() => setStep(step - 1)}>
+          <ChevronLeft className="h-4 w-4 mr-1" /> Sebelumnya
         </Button>
-        {step === 1 ? (
-          <Button onClick={() => setStep(2)} className="bg-gradient-primary text-primary-foreground shadow-lift">
-            Lanjut <ChevronRight className="h-4 w-4 ml-1" />
+        {step < totalSteps ? (
+          <Button onClick={() => setStep(step + 1)} className="bg-primary text-primary-foreground shadow-sm">
+            Selanjutnya <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         ) : (
-          <Button onClick={simpanKeBackend} className="bg-gradient-primary text-primary-foreground shadow-lift">
-            <Check className="h-4 w-4 mr-1" /> Simpan Survei
+          <Button onClick={simpanKeBackend} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
+            <Check className="h-4 w-4 mr-1" /> Selesai & Kirim Laporan
           </Button>
         )}
       </div>
@@ -196,43 +231,58 @@ export function SurveiView() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-semibold">{label}</Label>
-      {children}
-    </div>
-  );
-}
-
+// --- KOMPONEN STEP 1 (DATA UMUM) ---
 function Step1({ identitas, setIdentitas }: { identitas: IdentitasGedung, setIdentitas: any }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleChange = (field: keyof IdentitasGedung, value: string) => {
     setIdentitas((prev: IdentitasGedung) => ({ ...prev, [field]: value }));
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validasi ekstensi
+      const isPdfOrJpg = file.type === "application/pdf" || file.type === "image/jpeg" || file.type === "image/png";
+      if (!isPdfOrJpg) {
+        toast.error("Hanya file PDF atau JPG/PNG yang diperbolehkan.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        handleChange("asBuiltDrawing", reader.result as string);
+        toast.success("Dokumen berhasil diunggah!");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
-    <Card className="p-6 sm:p-8 rounded-2xl shadow-card space-y-6">
+    <Card className="p-6 sm:p-8 rounded-2xl shadow-sm border-muted/60 space-y-6">
       <div>
-        <h2 className="font-bold">Identitas Bangunan</h2>
-        <p className="text-xs text-muted-foreground">Data umum gedung yang akan diperiksa.</p>
+        <h2 className="text-lg font-bold">Data Umum Gedung</h2>
+        <p className="text-xs text-muted-foreground">Isi informasi dasar bangunan yang akan diinspeksi.</p>
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Field label="Nama Bangunan"><Input value={identitas.namaBangunan} onChange={(e) => handleChange("namaBangunan", e.target.value)} placeholder="Mis. Gedung Serbaguna A" /></Field>
-        <Field label="Tahun Dibangun"><Input type="number" value={identitas.tahunDibangun} onChange={(e) => handleChange("tahunDibangun", e.target.value)} placeholder="2010" /></Field>
-        <Field label="Jumlah Tingkat"><Input type="number" value={identitas.jumlahTingkat} onChange={(e) => handleChange("jumlahTingkat", e.target.value)} placeholder="3" /></Field>
-        <Field label="Luas Total Lantai (m²)"><Input type="number" value={identitas.luasTotal} onChange={(e) => handleChange("luasTotal", e.target.value)} placeholder="1200" /></Field>
-        <Field label="Luas Lantai Basement (m²)"><Input type="number" value={identitas.luasBasement} onChange={(e) => handleChange("luasBasement", e.target.value)} placeholder="0" /></Field>
-        <Field label="Fungsi Bangunan">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-2"><Label>Nama Bangunan</Label><Input value={identitas.namaBangunan} onChange={(e) => handleChange("namaBangunan", e.target.value)} placeholder="Mis. Gedung Serbaguna A" /></div>
+        <div className="space-y-2"><Label>Tahun Dibangun</Label><Input type="number" value={identitas.tahunDibangun} onChange={(e) => handleChange("tahunDibangun", e.target.value)} placeholder="2010" /></div>
+        <div className="space-y-2"><Label>Jumlah Tingkat</Label><Input type="number" value={identitas.jumlahTingkat} onChange={(e) => handleChange("jumlahTingkat", e.target.value)} placeholder="3" /></div>
+        <div className="space-y-2"><Label>Luas Total Lantai (m²)</Label><Input type="number" value={identitas.luasTotal} onChange={(e) => handleChange("luasTotal", e.target.value)} placeholder="1200" /></div>
+        <div className="space-y-2"><Label>Luas Lantai Basement (m²)</Label><Input type="number" value={identitas.luasBasement} onChange={(e) => handleChange("luasBasement", e.target.value)} placeholder="0" /></div>
+
+        <div className="space-y-2"><Label>Fungsi Bangunan</Label>
           <Select value={identitas.fungsi} onValueChange={(v) => handleChange("fungsi", v)}>
             <SelectTrigger><SelectValue placeholder="Pilih fungsi" /></SelectTrigger>
             <SelectContent>
-              {["Hunian", "Pendidikan", "Kesehatan", "Perkantoran", "Sosial Budaya", "Keagamaan"].map((f) => (
+              {/* Opsi Fungsi Diperbanyak */}
+              {["Fungsi Hunian", "Fungsi Keagamaan", "Fungsi Usaha", "Fungsi Sosial Budaya", "Fungsi Khusus", "Fungsi Ganda/Campuran"].map((f) => (
                 <SelectItem key={f} value={f}>{f}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </Field>
-        <Field label="Klasifikasi Bangunan">
+        </div>
+
+        <div className="space-y-2"><Label>Klasifikasi Bangunan</Label>
           <Select value={identitas.klasifikasi} onValueChange={(v) => handleChange("klasifikasi", v)}>
             <SelectTrigger><SelectValue placeholder="Pilih klasifikasi" /></SelectTrigger>
             <SelectContent>
@@ -241,288 +291,244 @@ function Step1({ identitas, setIdentitas }: { identitas: IdentitasGedung, setIde
               ))}
             </SelectContent>
           </Select>
-        </Field>
-        <Field label="Nama Pemilik"><Input value={identitas.namaPemilik} onChange={(e) => handleChange("namaPemilik", e.target.value)} placeholder="Mis. Pemkot Jakarta Timur" /></Field>
-        <Field label="Alamat"><Input value={identitas.alamat} onChange={(e) => handleChange("alamat", e.target.value)} placeholder="Jl. Raya Cipayung No. 12" /></Field>
+        </div>
+        <div className="space-y-2"><Label>Nama Pemilik</Label><Input value={identitas.namaPemilik} onChange={(e) => handleChange("namaPemilik", e.target.value)} placeholder="Pemilik / Instansi" /></div>
+        <div className="space-y-2"><Label>Alamat Lengkap</Label><Input value={identitas.alamat} onChange={(e) => handleChange("alamat", e.target.value)} placeholder="Jl. Raya..." /></div>
       </div>
 
-      <div className="sm:col-span-2 lg:col-span-3">
-        <Label className="text-xs font-semibold">Catatan Tambahan</Label>
-        <Textarea value={identitas.catatan} onChange={(e) => handleChange("catatan", e.target.value)} className="mt-1.5" placeholder="Tambahkan catatan kondisi lingkungan, akses, dll." rows={3} />
+      {/* Upload As Built Drawing */}
+      <div className="pt-4 border-t">
+        <Label className="block mb-2">Gambar Bangunan / As-Built Drawing (PDF/JPG)</Label>
+        <div className="flex items-center gap-4">
+          <input type="file" accept=".pdf, image/jpeg, image/png" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+          <Button variant="outline" type="button" onClick={() => fileInputRef.current?.click()} className="gap-2">
+            <Upload className="h-4 w-4" /> Pilih File
+          </Button>
+          {identitas.asBuiltDrawing && (
+            <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+              <Check className="h-3 w-3" /> File terunggah
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <Label className="block mb-2">Catatan Tambahan</Label>
+        <Textarea value={identitas.catatan} onChange={(e) => handleChange("catatan", e.target.value)} placeholder="Kondisi lingkungan sekitar..." rows={3} />
       </div>
     </Card>
   );
 }
 
-function Step2({ rows, setRows }: { rows: DamageRow[], setRows: any }) {
+
+// --- KOMPONEN STEP KERUSAKAN ---
+function StepKerusakan({ category, rows, setRows }: { category: (typeof CATEGORIES)[number], rows: DamageRow[], setRows: any }) {
   return (
-    <Card className="p-4 sm:p-6 rounded-2xl shadow-card relative">
-      <div className="mb-4 px-2">
-        <h2 className="font-bold">Data Kerusakan</h2>
-        <p className="text-xs text-muted-foreground">Catat semua kerusakan per kategori pekerjaan.</p>
+    <div className="space-y-6">
+      <div className="mb-2">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <span className={`h-4 w-4 rounded-full ${category.color.split(' ')[0]}`} />
+          {category.label}
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">Catat detail kerusakan untuk setiap komponen {category.label.toLowerCase()}.</p>
       </div>
-      <Accordion type="multiple" defaultValue={["struktur"]} className="space-y-3">
-        {CATEGORIES.map((cat) => (
-          <AccordionItem key={cat.key} value={cat.key} className="border rounded-xl overflow-hidden bg-white">
-            <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40">
-              <div className="flex items-center gap-3">
-                <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md ${cat.color}`}>
-                  {cat.key}
-                </span>
-                <span className="font-semibold text-sm">{cat.label}</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4">
-              <DamageTable category={cat} rows={rows} setRows={setRows} />
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
-    </Card>
+
+      {/* Render Tabel Terpisah per Komponen */}
+      {category.components.map((comp) => (
+        <ComponentTable key={comp.name} component={comp} categoryKey={category.key} rows={rows} setRows={setRows} />
+      ))}
+    </div>
   );
 }
 
-function DamageTable({ category, rows, setRows }: { category: (typeof CATEGORIES)[number], rows: DamageRow[], setRows: any }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+// --- SUB-KOMPONEN: TABEL PER KOMPONEN & AUTO-GENERATE ---
+function ComponentTable({ component, categoryKey, rows, setRows }: { component: any, categoryKey: string, rows: DamageRow[], setRows: any }) {
+  const [jumlahGen, setJumlahGen] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [cameraState, setCameraState] = useState<{isOpen: boolean, rowId: string | null}>({isOpen: false, rowId: null});
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
 
-  const update = (id: string, patch: Partial<DamageRow>) =>
-    setRows((r: DamageRow[]) => r.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  const componentRows = rows.filter(r => r.komponen === component.name);
 
-  const addRow = () =>
-    setRows((r: DamageRow[]) => [
-      ...r,
-      { 
-        id: crypto.randomUUID(), 
-        komponen: category.components[0].name, 
-        jenis: category.components[0].jenisKerusakan[0], 
-        volumeTotal: "", 
-        volumeKerusakan: "", 
-        satuan: category.components[0].unit,
-        foto: null
-      },
-    ]);
+  // Fungsi membuat singkatan otomatis (Contoh: Pondasi -> P)
+  const getPrefix = (name: string) => name.split(' ').map(w => w[0]).join('').toUpperCase();
 
-  const removeRow = (id: string) => setRows((r: DamageRow[]) => r.filter((row) => row.id !== id));
+  // Fungsi Auto Generate Baris
+  const handleGenerate = () => {
+    const count = parseInt(jumlahGen);
+    if (isNaN(count) || count <= 0) return;
 
-  const getJenisKerusakanList = (komponenName: string) => {
-    const comp = category.components.find((c) => c.name === komponenName);
-    return comp ? comp.jenisKerusakan : [];
+    const prefix = getPrefix(component.name);
+    const existingCount = componentRows.length;
+
+    const newRows = Array.from({ length: count }).map((_, i) => ({
+      id: crypto.randomUUID(),
+      kategoriKey: categoryKey,
+      kode: `${prefix}${existingCount + i + 1}`, // Bikin P1, P2, P3 otomatis
+      komponen: component.name,
+      jenis: component.jenisKerusakan[0],
+      volumeTotal: "", panjang: "", lebar: "", tinggi: "", volumeKerusakan: "",
+      satuan: component.unit,
+      foto: null
+    }));
+
+    setRows((prev: DamageRow[]) => [...prev, ...newRows]);
+    setJumlahGen(""); // Kosongkan input setelah diklik
+    toast.success(`${count} baris ${component.name} berhasil ditambahkan!`);
   };
 
+  const update = (id: string, patch: Partial<DamageRow>) => {
+    setRows((r: DamageRow[]) => r.map((row) => {
+      if (row.id !== id) return row;
+      const updatedRow = { ...row, ...patch };
+      
+      // Logika Volume PxLxT
+      if (patch.panjang !== undefined || patch.lebar !== undefined || patch.tinggi !== undefined) {
+        const p = parseFloat(updatedRow.panjang) || 1;
+        const l = parseFloat(updatedRow.lebar) || 1;
+        const t = parseFloat(updatedRow.tinggi) || 1;
+        
+        let vol = 0;
+        if (updatedRow.satuan === 'm³') vol = p * l * t;
+        else if (updatedRow.satuan === 'm²') vol = p * l;
+        else if (updatedRow.satuan === 'm¹') vol = p;
+        else vol = p;
+
+        if (updatedRow.panjang || updatedRow.lebar || updatedRow.tinggi) {
+          updatedRow.volumeKerusakan = vol.toFixed(2);
+        }
+      }
+      return updatedRow;
+    }));
+  };
+
+  const removeRow = (id: string) => setRows((r: DamageRow[]) => r.filter((row) => row.id !== id));
+  
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && activeRowId) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        // Mengubah gambar menjadi base64 sebelum dikirim ke database backend
-        update(activeRowId, { foto: reader.result as string });
-        toast.success("Foto berhasil diunggah!");
-      };
+      reader.onloadend = () => { update(activeRowId, { foto: reader.result as string }); };
       reader.readAsDataURL(file);
     }
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
-
-  const startCamera = async (id: string) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
-      setCameraState({ isOpen: true, rowId: id });
-      
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play();
-        }
-      }, 100);
-    } catch (err) {
-      toast.error("Tidak dapat mengakses kamera. Pastikan izin diberikan di browser Anda.");
-      console.error(err);
-    }
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-    }
-    setCameraState({ isOpen: false, rowId: null });
-  };
-
-  const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current && cameraState.rowId) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      
-      update(cameraState.rowId, { foto: dataUrl });
-      stopCamera();
-      toast.success("Foto berhasil dijepret!");
-    }
-  };
-
-  // Hanya memfilter baris yang sesuai dengan kategori saat ini
-  const categoryRows = rows.filter(row => category.components.some(c => c.name === row.komponen));
 
   return (
-    <div className="space-y-3">
-      <input 
-        type="file" 
-        accept="image/*" 
-        className="hidden" 
-        ref={fileInputRef} 
-        onChange={handleFileUpload} 
-      />
+    <Card className="rounded-xl shadow-sm border overflow-hidden bg-white">
+      {/* Header Komponen & Input Generate */}
+      <div className="bg-slate-50 border-b p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Layers className="h-4 w-4 text-primary" />
+          <h3 className="font-bold text-sm">Komponen: {component.name}</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs whitespace-nowrap">Jumlah {component.name}:</Label>
+          <Input 
+            type="number" 
+            placeholder="Mis: 10" 
+            className="h-8 w-20 text-center" 
+            value={jumlahGen} 
+            onChange={(e) => setJumlahGen(e.target.value)} 
+          />
+          <Button size="sm" onClick={handleGenerate} className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Plus className="h-4 w-4 mr-1" /> Generate
+          </Button>
+        </div>
+      </div>
 
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm min-w-[850px]">
-          <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
+      <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[1000px]">
+          <thead className="bg-muted/30 text-xs uppercase text-muted-foreground border-b">
             <tr>
-              <th className="text-left font-semibold px-3 py-2.5">Komponen</th>
-              <th className="text-left font-semibold px-3 py-2.5">Jenis Kerusakan</th>
-              <th className="text-left font-semibold px-3 py-2.5">Volume Total</th>
-              <th className="text-left font-semibold px-3 py-2.5">Vol. Kerusakan</th>
-              <th className="text-left font-semibold px-3 py-2.5">Satuan</th>
-              <th className="text-right font-semibold px-3 py-2.5">Aksi</th>
+              <th className="px-3 py-3 text-left w-20">Kode</th>
+              <th className="px-3 py-3 text-left w-64">Jenis Kerusakan</th>
+              <th className="px-3 py-3 text-center">Dimensi (P x L x T)</th>
+              <th className="px-3 py-3 text-center w-28">Vol Total</th>
+              <th className="px-3 py-3 text-center w-28">Vol Rusak</th>
+              <th className="px-3 py-3 text-center w-16">Satuan</th>
+              <th className="px-3 py-3 text-right w-24">Aksi</th>
             </tr>
           </thead>
           <tbody>
-            {categoryRows.map((row) => (
-              <tr key={row.id} className="border-t hover:bg-slate-50/50 transition-colors">
-                <td className="px-3 py-2">
-                  <Select
-                    value={row.komponen}
-                    onValueChange={(v) => {
-                      const c = category.components.find((c) => c.name === v)!;
-                      update(row.id, { komponen: v, satuan: c.unit, jenis: c.jenisKerusakan[0] });
-                    }}
-                  >
-                    <SelectTrigger className="h-9 min-w-[160px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {category.components.map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </td>
-                <td className="px-3 py-2">
-                  <Select value={row.jenis} onValueChange={(v) => update(row.id, { jenis: v })}>
-                    <SelectTrigger className="h-9 min-w-[220px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {getJenisKerusakanList(row.komponen).map((j) => (
-                        <SelectItem key={j} value={j}>{j}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </td>
-                <td className="px-3 py-2">
-                  <Input className="h-9 w-24" type="number" placeholder="0" value={row.volumeTotal} onChange={(e) => update(row.id, { volumeTotal: e.target.value })} />
-                </td>
-                <td className="px-3 py-2">
-                  <Input className="h-9 w-24 border-red-200 focus-visible:ring-red-400" type="number" placeholder="0" value={row.volumeKerusakan} onChange={(e) => update(row.id, { volumeKerusakan: e.target.value })} />
-                </td>
-                <td className="px-3 py-2">
-                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-xs font-mono font-bold">
-                    {row.satuan}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    
-                    {row.foto ? (
-                      <div className="relative group rounded-md border overflow-hidden h-9 w-9 bg-slate-100">
-                        <img src={row.foto} alt="Bukti" className="h-full w-full object-cover" />
-                        <button 
-                          onClick={() => update(row.id, { foto: null })} 
-                          className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Hapus Foto"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="icon" variant="ghost" className="h-9 w-9 text-slate-500 hover:bg-emerald-100 hover:text-emerald-700">
-                            <Camera className="h-4 w-4" />
+            {componentRows.length === 0 ? (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-xs text-muted-foreground italic">Belum ada data. Masukkan jumlah dan klik Generate.</td></tr>
+            ) : (
+              componentRows.map((row) => (
+                <tr key={row.id} className="border-b hover:bg-slate-50/50">
+                  <td className="px-3 py-2">
+                    <Input value={row.kode} onChange={(e) => update(row.id, { kode: e.target.value })} className="h-8 font-mono bg-white" />
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1">
+                      <Select value={row.jenis} onValueChange={(v) => update(row.id, { jenis: v })}>
+                        <SelectTrigger className="h-8 bg-white flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {component.jenisKerusakan.map((j: string) => <SelectItem key={j} value={j}>{j}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      
+                      {/* Tombol Info Rekomendasi */}
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-50 shrink-0">
+                            <Info className="h-4 w-4" />
                           </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => startCamera(row.id)} className="cursor-pointer gap-2">
-                            <Camera className="h-4 w-4 text-emerald-600" />
-                            <span>Buka Kamera (Live)</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => {
-                              setActiveRowId(row.id);
-                              fileInputRef.current?.click();
-                            }} 
-                            className="cursor-pointer gap-2"
-                          >
-                            <ImageIcon className="h-4 w-4 text-blue-600" />
-                            <span>Pilih dari Galeri/File</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-
-                    <Button size="icon" variant="ghost" type="button" onClick={() => removeRow(row.id)} className="h-9 w-9 text-destructive hover:bg-red-50">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {categoryRows.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-sm text-muted-foreground">Belum ada data kerusakan.</td></tr>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle className="text-lg flex items-center gap-2">
+                              <Info className="h-5 w-5 text-blue-500" />
+                              Penanganan: {component.name} - {row.jenis}
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="mt-4 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground bg-slate-50 p-4 rounded-md border">
+                            {REKOMENDASI_MAP[`${component.name}_${row.jenis}`] || REKOMENDASI_MAP["default"]}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center justify-center gap-1">
+                      <Input type="number" placeholder="P" className="h-8 w-16 text-center" value={row.panjang} onChange={(e) => update(row.id, {panjang: e.target.value})} disabled={row.satuan === 'unit' || row.satuan === 'titik'}/>
+                      <span className="text-muted-foreground text-xs">×</span>
+                      <Input type="number" placeholder="L" className="h-8 w-16 text-center" value={row.lebar} onChange={(e) => update(row.id, {lebar: e.target.value})} disabled={row.satuan === 'm¹' || row.satuan === 'unit' || row.satuan === 'titik'}/>
+                      <span className="text-muted-foreground text-xs">×</span>
+                      <Input type="number" placeholder="T" className="h-8 w-16 text-center" value={row.tinggi} onChange={(e) => update(row.id, {tinggi: e.target.value})} disabled={row.satuan === 'm²' || row.satuan === 'm¹' || row.satuan === 'unit' || row.satuan === 'titik'}/>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <Input type="number" placeholder="0" className="h-8 text-center bg-white" value={row.volumeTotal} onChange={(e) => update(row.id, {volumeTotal: e.target.value})} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <Input type="number" placeholder="0" className="h-8 text-center border-emerald-300 bg-emerald-50 font-bold" value={row.volumeKerusakan} onChange={(e) => update(row.id, {volumeKerusakan: e.target.value})} />
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className="text-xs font-bold text-muted-foreground bg-slate-100 px-2 py-1 rounded">{row.satuan}</span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      {row.foto ? (
+                        <div className="relative group rounded border overflow-hidden h-8 w-8 cursor-pointer" onClick={() => update(row.id, { foto: null })}>
+                          <img src={row.foto} alt="Bukti" className="h-full w-full object-cover" />
+                        </div>
+                      ) : (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50" onClick={() => { setActiveRowId(row.id); fileInputRef.current?.click(); }}>
+                          <ImageIcon className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => removeRow(row.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
       </div>
-      <Button variant="outline" size="sm" onClick={addRow} type="button">
-        <Plus className="h-4 w-4 mr-1" /> Tambah Komponen
-      </Button>
-
-      {/* MODAL KAMERA FULLSCREEN */}
-      {cameraState.isOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black flex flex-col animate-in fade-in duration-200">
-          <div className="p-4 flex justify-between items-center bg-black/50 text-white absolute top-0 left-0 right-0 z-10 backdrop-blur-sm">
-            <span className="font-semibold tracking-wide">Kamera Web (Live)</span>
-            <Button variant="ghost" size="icon" onClick={stopCamera} className="text-white hover:bg-white/20 rounded-full">
-              <X className="h-6 w-6" />
-            </Button>
-          </div>
-          
-          <div className="flex-1 flex items-center justify-center overflow-hidden relative bg-zinc-900">
-            <video ref={videoRef} className="min-w-full min-h-full object-cover" playsInline muted />
-            <canvas ref={canvasRef} className="hidden" />
-            
-            <div className="absolute inset-0 border-[40px] border-black/40 pointer-events-none">
-              <div className="w-full h-full border-2 border-white/50 border-dashed rounded-lg" />
-            </div>
-          </div>
-          
-          <div className="p-8 flex justify-center absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black via-black/80 to-transparent">
-            <button 
-              onClick={capturePhoto} 
-              className="h-16 w-16 rounded-full bg-white border-4 border-emerald-500 hover:scale-95 active:scale-90 transition-transform flex items-center justify-center shadow-2xl"
-              title="Jepret Foto"
-            >
-              <div className="h-12 w-12 rounded-full border-2 border-emerald-200 bg-emerald-50" />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </Card>
   );
 }

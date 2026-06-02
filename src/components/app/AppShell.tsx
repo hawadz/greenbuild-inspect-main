@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Building2, Home, BookOpen, ClipboardPlus, FileBarChart2, Search, Bell, LogOut, ChevronDown } from "lucide-react";
+import { Building2, Home, BookOpen, ClipboardPlus, FileBarChart2, Search, Bell, LogOut, ChevronDown, FileText } from "lucide-react";
 import type { NavKey } from "@/routes/index";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -11,6 +11,7 @@ import {
 const NAV: { key: NavKey; label: string; icon: typeof Home }[] = [
   { key: "beranda", label: "Beranda", icon: Home },
   { key: "panduan", label: "Panduan Survei", icon: BookOpen },
+  { key: "buku-pedoman", label: "Buku Pedoman", icon: FileText }, // <-- Menu Baru
   { key: "survei", label: "Mulai Survei", icon: ClipboardPlus },
   { key: "laporan", label: "Hasil Laporan", icon: FileBarChart2 },
 ];
@@ -20,6 +21,7 @@ const TITLES: Record<NavKey, string> = {
   panduan: "Panduan Survei",
   survei: "Mulai Survei",
   laporan: "Hasil & Laporan",
+  "buku-pedoman": "Buku Pedoman", // <-- Title Baru
 };
 
 type Props = {

@@ -6,8 +6,11 @@ import { BerandaView } from "@/components/app/views/BerandaView";
 import { PanduanView } from "@/components/app/views/PanduanView";
 import { SurveiView } from "@/components/app/views/SurveiView";
 import { LaporanView } from "@/components/app/views/LaporanView";
+// 1. IMPORT VIEW BARU DI SINI
+import { BukuPedomanView } from "@/components/app/views/BukuPedomanView"; 
 
-export type NavKey = "beranda" | "panduan" | "survei" | "laporan";
+// 2. TAMBAHKAN "buku-pedoman" KE DALAM NavKey
+export type NavKey = "beranda" | "panduan" | "survei" | "laporan" | "buku-pedoman";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,6 +34,8 @@ function Index() {
       {active === "panduan" && <PanduanView />}
       {active === "survei" && <SurveiView />}
       {active === "laporan" && <LaporanView />}
+      {/* 3. RENDER VIEW BARU DI SINI */}
+      {active === "buku-pedoman" && <BukuPedomanView />} 
     </AppShell>
   );
 }
